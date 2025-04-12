@@ -1,4 +1,6 @@
 # Ixion Modding Helper
+[Nexusmods](https://www.nexusmods.com/ixion/mods/11)  
+<br>
 This is a modding helper I wrote for myself (and of course others) to make modding easier. Features for now include:
 - A settings helper with its own settings page including:
   - Key input setting
