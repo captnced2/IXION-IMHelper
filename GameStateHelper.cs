@@ -34,12 +34,16 @@ public static class GameStateHelper
 
     public static void addSceneChangedListener(Action listener, GameScene scene)
     {
-        sceneChangedListeners.Add(new(scene, listener));
+        sceneChangedListeners.Add(new KeyValuePair<GameScene, Action>(scene, listener));
+        Plugin.Log.LogInfo("Registered" + scene + " listener from Assembly \"" +
+                           Plugin.getCallingAssemblyName() + "\"");
     }
 
     public static void addSceneChangedToInGameListener(Action listener)
     {
         sceneChangedToInGameListeners.Add(listener);
+        Plugin.Log.LogInfo("Registered in-game listener from Assembly \"" +
+                           Plugin.getCallingAssemblyName() + "\"");
     }
 
     internal static void sceneChangedListener(Scene current, Scene next)

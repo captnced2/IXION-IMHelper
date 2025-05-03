@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using BulwarkStudios.GameSystems.Ui;
 using BulwarkStudios.Utils.UI;
@@ -303,6 +304,9 @@ public static class SettingsHelper
             changeableInGame = ChangeableInGame;
             section = Section;
             section.addSetting(this);
+            var st = new StackTrace();
+            Plugin.Log.LogInfo("Added " + GetType().Name + " \"" + name + "\" from Assembly \"" +
+                               Plugin.getCallingAssemblyName() + "\"");
         }
 
         internal abstract void loadSettingFromConfig();

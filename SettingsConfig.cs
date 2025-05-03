@@ -31,6 +31,7 @@ internal static class SettingsConfig
         {
             File.WriteAllText(configFilePath, JsonSerializer.Serialize(allSettings));
         }
+        Plugin.Log.LogInfo("Setting \"" + section + "." + setting + "\" set to \"" + value + "\"");
     }
 
     internal static string loadSetting(string section, string setting)
