@@ -208,6 +208,11 @@ public static class SettingsHelper
                         keySettingListening.changeKey(Event.current.keyCode);
                         keySettingListening = null;
                     }
+
+                    if (Event.current.keyCode == keySettingListening.getKey())
+                    {
+                        keySettingListening = null;
+                    }
                 }
                 else if (keySettingListening == null && Event.current.keyCode != KeyCode.None)
                 {
