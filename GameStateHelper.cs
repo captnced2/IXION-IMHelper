@@ -20,7 +20,7 @@ public static class GameStateHelper
         Chapter5 = 9
     }
 
-    private static readonly Dictionary<GameScene, Action> sceneChangedListeners = new();
+    private static readonly List<KeyValuePair<GameScene, Action>> sceneChangedListeners = new();
     private static readonly List<Action> sceneChangedToInGameListeners = new();
 
     public static GameScene currentScene { get; private set; }
@@ -34,7 +34,7 @@ public static class GameStateHelper
 
     public static void addSceneChangedListener(Action listener, GameScene scene)
     {
-        sceneChangedListeners.Add(scene, listener);
+        sceneChangedListeners.Add(new(scene, listener));
     }
 
     public static void addSceneChangedToInGameListener(Action listener)
