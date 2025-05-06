@@ -4,6 +4,7 @@ using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using BepInEx.Unity.IL2CPP;
+using HarmonyLib;
 using UnityEngine.Events;
 using UnityEngine.SceneManagement;
 
@@ -15,7 +16,7 @@ public class Plugin : BasePlugin
 {
     private const string Guid = "captnced.IMHelper";
     private const string Name = "IMHelper";
-    private const string Version = "1.1.1";
+    private const string Version = "2.0.0";
     internal new static ManualLogSource Log;
     internal static ConfigFile config;
 
@@ -25,6 +26,10 @@ public class Plugin : BasePlugin
         config = Config;
         SceneManager.activeSceneChanged += (UnityAction<Scene, Scene>)GameStateHelper.sceneChangedListener;
         AddComponent<SettingsHelper.keyListener>();
+        var harmony = new Harmony(Guid);
+        harmony.PatchAll();
+        foreach (var patch in harmony.GetPatchedMethods())
+            Log.LogInfo("Patched " + patch.DeclaringType + ":" + patch.Name);
         Log.LogInfo("Loaded \"" + Name + "\" version " + Version + "!");
     }
 
