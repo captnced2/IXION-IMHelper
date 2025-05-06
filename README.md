@@ -6,7 +6,9 @@ This is a modding helper I wrote for myself (and of course others) to make moddi
   - Key input setting
   - Boolean setting  
 Which are automatically saved
-- A game state helper only for coding
+- A game state helper
+- A button helper
+- A popup helper
 
 I won't provide any documentation (at least not for now). If you want to know how it works/use it, just ask on discord.
 
