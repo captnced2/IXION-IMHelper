@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using BulwarkStudios.GameSystems.Ui;
+using BulwarkStudios.Stanford.Utils.Extensions;
 using BulwarkStudios.Utils.UI;
 using Stanford.Settings;
 using TMPro;
@@ -22,7 +22,7 @@ public static class SettingsHelper
         Bool
     }
 
-    internal static List<SettingsSection> sections = new();
+    private static readonly List<SettingsSection> sections = [];
     private static Canvas? keyBindingCanvas;
     private static GameObject? keyAlreadyUsed;
     private static TextMeshProUGUI? keyAlreadyUsedText;
@@ -30,18 +30,13 @@ public static class SettingsHelper
     private static KeyCode keyDoubleBindListening;
     private static bool initialized;
     private static bool initializedInGame;
+    private static Transform modsMenuTab;
     private static readonly List<Action<KeyCode>> keyPressedListeners = new();
     private static string settingsMenuRoot = "";
     private static string settingsButton = "";
     private static Transform seperatorTemplate;
     private static Transform keyTemplate;
     private static Transform boolTemplate;
-
-    static SettingsHelper()
-    {
-        GameStateHelper.addSceneChangedListener(mainMenuListener, GameStateHelper.GameScene.MainMenu);
-        GameStateHelper.addSceneChangedToInGameListener(inGameMenuListener);
-    }
 
     internal static void mainMenuListener()
     {
@@ -63,7 +58,6 @@ public static class SettingsHelper
 
     private static void setupTab()
     {
-        if (sections.Count == 0) return;
         var menu = GameObject.Find(settingsMenuRoot + "/Container/UI Window Header/Menu");
 
         for (var i = 0; i < menu.transform.childCount; i++)
@@ -73,9 +67,8 @@ public static class SettingsHelper
             child.GetComponent<UiButton>().add_OnTriggered(otherTabTriggered);
         }
 
-        var modsMenuTab = Object.Instantiate(menu.transform.FindChild("Controls"), menu.transform);
+        modsMenuTab = Object.Instantiate(menu.transform.FindChild("Controls"), menu.transform);
         modsMenuTab.name = "Mods";
-
         modsMenuTab.FindChild("Text (TMP)").GetComponent<TextMeshProUGUI>().text = "Mods";
         Action modsTabTriggered = delegate { modsMenuTabTriggered(); };
         modsMenuTab.GetComponent<UiButton>().add_OnTriggered(modsTabTriggered);
@@ -98,15 +91,24 @@ public static class SettingsHelper
         if (!initialized)
         {
             seperatorTemplate = GameObject.Find("UIGameSettingsSeparator(Clone)").transform;
-            keyTemplate = GameObject.Find("UIGameInputSetting(Clone)").transform;
+            var inputSetting =
+                GameObject.Find(
+                    "Canvas/WindowManager/1920x1080/UI Window Settings/Container/Scroll View/Viewport/Content/Settings/UIGameInputSetting(Clone)");
+            keyTemplate = inputSetting == null
+                ? GameObject.Find("GameSettingsManager/UIGameInputSetting").transform
+                    .FindChild("UIGameInputSetting(Clone)")
+                : GameObject
+                    .Find(
+                        "Canvas/WindowManager/1920x1080/UI Window Settings/Container/Scroll View/Viewport/Content/Settings/UIGameInputSetting(Clone)")
+                    .transform;
             boolTemplate = GameObject.Find("GameSettingsManager/UIGameBoolSetting").transform.GetChild(0);
             boolTemplate.gameObject.active = true;
             boolTemplate.FindChild("Text (TMP)").GetComponent<TextMeshProUGUI>().color = Color.white;
-            foreach (var section in sections)
-                section.createSection(GameStateHelper.isInGame());
             initialized = true;
         }
 
+        foreach (var section in sections)
+            section.createSection(GameStateHelper.isInGame());
         GameObject.Find(settingsMenuRoot + "/Container/Navigation").active = false;
         var scrollViewSettings =
             GameObject.Find(
@@ -121,6 +123,7 @@ public static class SettingsHelper
     {
         GameObject.Find(settingsMenuRoot + "/Container/Navigation").active = true;
         detachAllCustomSettings();
+        setSettingsTabVisibility();
     }
 
     private static void settingsWindowTriggeredInGame()
@@ -130,6 +133,15 @@ public static class SettingsHelper
             setupTab();
             initializedInGame = true;
         }
+
+        setSettingsTabVisibility();
+    }
+
+    private static void setSettingsTabVisibility()
+    {
+        modsMenuTab.SetParent(sections.Count == 0
+            ? null
+            : GameObject.Find(settingsMenuRoot + "/Container/UI Window Header/Menu").transform);
     }
 
     private static void otherMenuTabTriggered(Transform tab)
@@ -193,40 +205,35 @@ public static class SettingsHelper
         }
     }
 
-    internal class keyListener : MonoBehaviour
+    internal static class keyListener
     {
-        private void OnGUI()
+        internal static void checkKeyPresses()
         {
-            if (Event.current.type == EventType.KeyDown)
-                if (keySettingListening != null && Event.current.keyCode != KeyCode.None &&
-                    keyDoubleBindListening == KeyCode.None)
+            if (keySettingListening != null && keyDoubleBindListening == KeyCode.None)
+            {
+                keyBindingCanvas.enabled = false;
+                if (Event.current.keyCode != KeyCode.Escape &&
+                    Event.current.keyCode != keySettingListening.getKey() && doubleBind() == false)
                 {
-                    keyBindingCanvas.enabled = false;
-                    if (Event.current.keyCode != KeyCode.Escape &&
-                        Event.current.keyCode != keySettingListening.getKey() && doubleBind() == false)
-                    {
-                        keySettingListening.changeKey(Event.current.keyCode);
-                        keySettingListening = null;
-                    }
+                    keySettingListening.changeKey(Event.current.keyCode);
+                    keySettingListening = null;
+                }
 
-                    if (Event.current.keyCode == keySettingListening.getKey())
-                    {
-                        keySettingListening = null;
-                    }
-                }
-                else if (keySettingListening == null && Event.current.keyCode != KeyCode.None)
-                {
-                    foreach (var listener in keyPressedListeners)
-                        listener(Event.current.keyCode);
-                }
+                if (keySettingListening != null && Event.current.keyCode == keySettingListening.getKey())
+                    keySettingListening = null;
+            }
+            else if (keySettingListening == null && Event.current.keyCode != KeyCode.None)
+            {
+                foreach (var listener in keyPressedListeners)
+                    listener(Event.current.keyCode);
+            }
         }
     }
 
     public class SettingsSection
     {
         internal readonly string sectionName;
-        private readonly string seperatorName = "UIGameSettingsSeparator(Clone)";
-        private readonly string transformName = "UIGameInputSetting(Clone)";
+        private bool created;
         private Transform seperator;
         private Transform transform;
 
@@ -241,6 +248,18 @@ public static class SettingsHelper
         }
 
         internal List<Setting> sectionSettings { get; } = new();
+
+        public void destroySection()
+        {
+            foreach (var setting in sectionSettings)
+                setting.destroySetting();
+            sectionSettings.Clear();
+            if (seperator != null)
+                seperator.gameObject.Destroy();
+            if (transform != null)
+                transform.gameObject.Destroy();
+            sections.Remove(this);
+        }
 
         internal void addSetting(Setting setting)
         {
@@ -268,10 +287,31 @@ public static class SettingsHelper
 
         internal void createSection(bool inGame)
         {
-            if (sectionSettings.Count > 0)
+            if (sectionSettings.Count <= 0) return;
+            if (!created)
             {
-                transform = Object.Instantiate(GameObject.Find(transformName).transform);
-                seperator = Object.Instantiate(GameObject.Find(seperatorName).transform);
+                var inputSetting =
+                    GameObject.Find(
+                        "Canvas/WindowManager/1920x1080/UI Window Settings/Container/Scroll View/Viewport/Content/Settings/UIGameInputSetting(Clone)");
+                if (inputSetting == null)
+                {
+                    transform = Object.Instantiate(GameObject.Find("GameSettingsManager/UIGameInputSetting").transform
+                        .FindChild("UIGameInputSetting(Clone)"));
+                    seperator = Object.Instantiate(GameObject.Find("GameSettingsManager/UIGameSettingsSeparator")
+                        .transform.FindChild("UIGameSettingsSeparator(Clone)"));
+                }
+                else
+                {
+                    transform = Object.Instantiate(GameObject
+                        .Find(
+                            "Canvas/WindowManager/1920x1080/UI Window Settings/Container/Scroll View/Viewport/Content/Settings/UIGameInputSetting(Clone)")
+                        .transform);
+                    seperator = Object.Instantiate(GameObject
+                        .Find(
+                            "Canvas/WindowManager/1920x1080/UI Window Settings/Container/Scroll View/Viewport/Content/Settings/UIGameSettingsSeparator(Clone)")
+                        .transform);
+                }
+
                 transform.name = "CustomUISettingsSection";
                 seperator.name = "CustomUISettingsSectionSeparator";
                 var text = transform.FindChild("Text (TMP)");
@@ -280,9 +320,13 @@ public static class SettingsHelper
                 textMesh.m_fontSize = 20;
                 text.GetComponent<LayoutElement>().preferredWidth = 800;
                 transform.FindChild("UI Binding Press").gameObject.active = false;
-                foreach (var setting in sectionSettings)
-                    setting.create(inGame);
+                transform.gameObject.SetActive(true);
+                seperator.gameObject.SetActive(true);
+                created = true;
             }
+
+            foreach (var setting in sectionSettings)
+                setting.create(inGame);
         }
     }
 
@@ -292,6 +336,7 @@ public static class SettingsHelper
         private readonly string description;
         internal readonly string name;
         private readonly SettingType type;
+        protected bool created;
         protected SettingsSection section;
         protected Transform seperator;
         protected Transform transform;
@@ -309,8 +354,17 @@ public static class SettingsHelper
             changeableInGame = ChangeableInGame;
             section = Section;
             section.addSetting(this);
-            var st = new StackTrace();
             Plugin.Log.LogInfo("Added " + GetType().Name + " \"" + name + "\" from Assembly \"" +
+                               Plugin.getCallingAssemblyName() + "\"");
+        }
+
+        public void destroySetting()
+        {
+            if (seperator != null)
+                seperator.gameObject.Destroy();
+            if (transform != null)
+                transform.gameObject.Destroy();
+            Plugin.Log.LogInfo("Removed " + GetType().Name + " \"" + name + "\" from Assembly \"" +
                                Plugin.getCallingAssemblyName() + "\"");
         }
 
@@ -352,6 +406,9 @@ public static class SettingsHelper
             {
                 text.GetComponent<TextMeshProUGUI>().text = name;
             }
+
+            transform.gameObject.SetActive(true);
+            seperator.gameObject.SetActive(true);
         }
 
         internal void detachSeperator()
@@ -383,6 +440,7 @@ public static class SettingsHelper
 
         internal override void create(bool inGame)
         {
+            if (created) return;
             base.create(inGame);
             dropdown = transform.FindChild("Dropdown").GetComponent<TMP_Dropdown>();
             dropdown.onValueChanged.AddListener((UnityAction<int>)valueChanged);
@@ -394,6 +452,8 @@ public static class SettingsHelper
                 dropdown.transform.FindChild("Label").GetComponent<TextMeshProUGUI>().color = Color.gray;
                 dropdown.transform.GetComponent<ClickHandlerFmod>().enabled = false;
             }
+
+            created = true;
         }
 
         internal void valueChanged(int dropdownValue)
@@ -478,6 +538,7 @@ public static class SettingsHelper
 
         internal override void create(bool inGame)
         {
+            if (created) return;
             base.create(inGame);
             var button = transform.FindChild("UI Binding Press");
             keyText = button.FindChild("Text (TMP)").GetComponent<TextMeshProUGUI>();
@@ -491,6 +552,8 @@ public static class SettingsHelper
                 button.FindChild("BG").gameObject.active = false;
                 keyText.color = Color.gray;
             }
+
+            created = true;
         }
 
         private void buttonTriggered()

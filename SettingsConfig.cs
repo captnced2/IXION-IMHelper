@@ -12,8 +12,7 @@ internal static class SettingsConfig
 
     internal static void saveSetting(string section, string setting, string value)
     {
-        var allSettings = getAllConfigSettings();
-        if (allSettings is null) allSettings = new List<configSettingEntry>();
+        var allSettings = getAllConfigSettings() ?? [];
         foreach (var configSetting in allSettings)
             if (configSetting.Section.Equals(section) && configSetting.Setting.Equals(setting))
             {

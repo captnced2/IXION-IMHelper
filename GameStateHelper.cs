@@ -35,15 +35,19 @@ public static class GameStateHelper
     public static void addSceneChangedListener(Action listener, GameScene scene)
     {
         sceneChangedListeners.Add(new KeyValuePair<GameScene, Action>(scene, listener));
-        Plugin.Log.LogInfo("Registered" + scene + " listener from Assembly \"" +
-                           Plugin.getCallingAssemblyName() + "\"");
+        var callingAssembly = Plugin.getCallingAssemblyName();
+        if (callingAssembly != null)
+            Plugin.Log.LogInfo("Registered" + scene + " scene listener from Assembly \"" +
+                               callingAssembly + "\"");
     }
 
     public static void addSceneChangedToInGameListener(Action listener)
     {
         sceneChangedToInGameListeners.Add(listener);
-        Plugin.Log.LogInfo("Registered in-game listener from Assembly \"" +
-                           Plugin.getCallingAssemblyName() + "\"");
+        var callingAssembly = Plugin.getCallingAssemblyName();
+        if (callingAssembly != null)
+            Plugin.Log.LogInfo("Registered in-game scene listener from Assembly \"" +
+                               callingAssembly + "\"");
     }
 
     internal static void sceneChangedListener(Scene current, Scene next)
@@ -52,9 +56,26 @@ public static class GameStateHelper
         currentScene = newScene;
         foreach (var l in sceneChangedListeners)
             if (l.Key == currentScene)
-                l.Value();
+                try
+                {
+                    l.Value();
+                }
+                catch (Exception e)
+                {
+                    Plugin.Log.LogError("Error while executing scene changed to " + l.Key + " listener: " + e);
+                    ;
+                }
+
         if (isInGame())
             foreach (var l in sceneChangedToInGameListeners)
-                l();
+                try
+                {
+                    l();
+                }
+                catch (Exception e)
+                {
+                    Plugin.Log.LogError("Error while executing scene changed to in-game listener: " + e);
+                    ;
+                }
     }
 }

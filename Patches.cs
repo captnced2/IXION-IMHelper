@@ -4,7 +4,7 @@ using I2.Loc;
 
 namespace IMHelper;
 
-public class Patches
+public static class Patches
 {
     [HarmonyPatch(typeof(LocalizationManager), nameof(LocalizationManager.GetTranslation))]
     public static class LocalizationPatch
@@ -19,10 +19,9 @@ public class Patches
     [HarmonyPatch(typeof(UIEscapeChecker), nameof(UIEscapeChecker.Ui_OnClosedManually))]
     public static class EscCheckerPatch
     {
-        public static bool Prefix()
+        public static void Prefix()
         {
             if (PopupHelper.textPopup.isOpened) PopupHelper.textPopup.close();
-            return true;
         }
     }
 }

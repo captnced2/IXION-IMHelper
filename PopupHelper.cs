@@ -7,7 +7,7 @@ using Object = UnityEngine.Object;
 
 namespace IMHelper;
 
-public class PopupHelper
+public static class PopupHelper
 {
     private static Transform clickBlocker;
     private static GameInputLockHandle lockHandle;
