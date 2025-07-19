@@ -17,7 +17,7 @@ public class Plugin : BasePlugin
 {
     internal const string Guid = "captnced.IMHelper";
     private const string Name = "IMHelper";
-    private const string Version = "3.0.0";
+    private const string Version = "3.1.0";
     internal new static ManualLogSource Log;
     internal static MonoHelper monoHelper;
     internal static ConfigFile config;
