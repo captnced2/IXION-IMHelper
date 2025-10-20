@@ -4,7 +4,9 @@
 This is a modding helper I wrote for myself (and of course others) to make modding easier. Features include:
 - A settings helper with its own settings page including:
   - Key input setting
-  - Boolean setting  
+  - Boolean setting
+  - Slider setting
+  - Number input setting  
 Which are automatically saved
 - A mod menu
 - A game state helper
