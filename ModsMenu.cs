@@ -28,6 +28,8 @@ public static class ModsMenu
         var menu = GameObject.Find("Canvas/1920x1080/Canvas Group/Default/Menu");
         var modsButton = new ButtonHelper.TextButton("Mods", menu.transform.FindChild("Button_Credits"), menu.transform,
             modsMenuTriggered, "Mods");
+        menu.transform.FindChild("Button_LoadGame").GetComponent<UiButton>()
+            .add_OnTriggered(new Action(loadMenuTriggered));
         modsButton.createButton();
         modsButton.buttonTransform.SetSiblingIndex(2);
         initialized = false;
@@ -38,6 +40,11 @@ public static class ModsMenu
     {
         setupWindow();
         openWindow();
+    }
+
+    private static void loadMenuTriggered()
+    {
+        setupWindow();
     }
 
     private static void setupWindow()
@@ -52,7 +59,7 @@ public static class ModsMenu
         window.transform.FindChild("Container/UI Window Header/Title").GetComponent<TextMeshProUGUI>().text = "Mods";
         var closeButton = window.transform.FindChild("Container/UI Window Header/Close Button");
         closeButton.GetComponent<UiButtonTriggerUnityEvent>().enabled = false;
-        closeButton.GetComponent<UiButton>().add_OnTriggered(new Action(delegate { closeWindow(); }));
+        closeButton.GetComponent<UiButton>().add_OnTriggered(new Action(closeWindow));
         backgroundBlocker = GameObject.Find("Canvas/WindowManager").transform.parent.FindChild("BackgroundUiBlocker");
         KeyListenerHelper.addMainMenuKeyListener(KeyCode.Escape, closeWindow);
         window.FindChild("Container/Scroll View").GetComponent<ScrollRect>().enabled = true;

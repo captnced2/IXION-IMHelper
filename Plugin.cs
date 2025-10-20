@@ -17,10 +17,11 @@ public class Plugin : BasePlugin
 {
     internal const string Guid = "captnced.IMHelper";
     private const string Name = "IMHelper";
-    private const string Version = "3.1.0";
+    private const string Version = "3.2.0";
     internal new static ManualLogSource Log;
     internal static MonoHelper monoHelper;
     internal static ConfigFile config;
+    internal static readonly SettingsHelper.SettingsSection helperSettingsSection = new("IM Helper");
 
     public override void Load()
     {
@@ -36,6 +37,10 @@ public class Plugin : BasePlugin
         GameStateHelper.addSceneChangedListener(SettingsHelper.mainMenuListener, GameStateHelper.GameScene.MainMenu);
         GameStateHelper.addSceneChangedToInGameListener(SettingsHelper.inGameMenuListener);
         GameStateHelper.addSceneChangedListener(ModsMenu.mainMenuListener, GameStateHelper.GameScene.MainMenu);
+        SavesHelper.init();
+        var fpsSetting = new SettingsHelper.BooleanSetting(helperSettingsSection, "FPS Display",
+            "Enables the FPS counter in the top right", false, true, toggleFpsDisplay);
+        GameStateHelper.addSceneChangedListener(delegate { toggleFpsDisplay(true); }, GameStateHelper.GameScene.MainMenu);
         Log.LogInfo("Loaded \"" + Name + "\" version " + Version + "!");
     }
 
@@ -43,7 +48,7 @@ public class Plugin : BasePlugin
     {
         var assembly = getCallingAssembly();
         if (assembly == null) return null;
-        return assembly.GetName().Name.Contains("BepInEx") ? null : assembly.GetName().Name;
+        return assembly.GetName().Name!.Contains("BepInEx") ? null : assembly.GetName().Name;
     }
 
     internal static Assembly getCallingAssembly()
@@ -61,5 +66,10 @@ public class Plugin : BasePlugin
 
     internal class MonoHelper : MonoBehaviour
     {
+    }
+
+    private static void toggleFpsDisplay(bool val)
+    {
+        GameObject.Find("Canvas/1920x1080/Performances").SetActive(val);
     }
 }

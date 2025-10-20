@@ -20,10 +20,12 @@ internal static class SettingsConfig
                 goto Write;
             }
 
-        var newConfigSettingEntry = new configSettingEntry();
-        newConfigSettingEntry.Section = section;
-        newConfigSettingEntry.Setting = setting;
-        newConfigSettingEntry.Value = value;
+        var newConfigSettingEntry = new configSettingEntry
+        {
+            Section = section,
+            Setting = setting,
+            Value = value
+        };
         allSettings.Add(newConfigSettingEntry);
 
         Write:

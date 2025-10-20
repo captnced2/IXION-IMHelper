@@ -26,22 +26,22 @@ public static class SettingsHelper
     }
 
     private static readonly List<SettingsSection> sections = [];
-    private static Canvas? keyBindingCanvas;
-    private static GameObject? keyAlreadyUsed;
-    private static TextMeshProUGUI? keyAlreadyUsedText;
+    private static Canvas keyBindingCanvas = null!;
+    private static GameObject keyAlreadyUsed = null!;
+    private static TextMeshProUGUI keyAlreadyUsedText = null!;
     private static KeySetting? keySettingListening;
     private static KeyCode keyDoubleBindListening;
     private static bool initialized;
     private static bool initializedInGame;
-    private static Transform modsMenuTab;
+    private static Transform modsMenuTab = null!;
     private static readonly List<Action<KeyCode>> keyPressedListeners = new();
     private static string settingsMenuRoot = "";
     private static string settingsButton = "";
-    private static Transform seperatorTemplate;
-    private static Transform keyTemplate;
-    private static Transform boolTemplate;
-    private static Transform sliderTemplate;
-    private static Transform numberInputTemplate;
+    private static Transform separatorTemplate = null!;
+    private static Transform keyTemplate = null!;
+    private static Transform boolTemplate = null!;
+    private static Transform sliderTemplate = null!;
+    private static Transform numberInputTemplate = null!;
 
     internal static void mainMenuListener()
     {
@@ -61,8 +61,8 @@ public static class SettingsHelper
             section.resetSection();
         settingsMenuRoot = "Canvas/WindowManagerCenterOption/UI Window Settings";
         settingsButton = "Canvas/WindowManagerCenterOption/UI Window Option/Container/Content/Settings";
-        Action settingsTriggered = delegate { settingsWindowTriggeredInGame(); };
-        GameObject.Find(settingsButton).GetComponent<UiButton>().add_OnTriggered(settingsTriggered);
+        GameObject.Find(settingsButton).GetComponent<UiButton>()
+            .add_OnTriggered(new Action(settingsWindowTriggeredInGame));
     }
 
     private static void setupTab()
@@ -72,26 +72,20 @@ public static class SettingsHelper
         for (var i = 0; i < menu.transform.childCount; i++)
         {
             var child = menu.transform.GetChild(i);
-            Action otherTabTriggered = delegate { otherMenuTabTriggered(child); };
-            child.GetComponent<UiButton>().add_OnTriggered(otherTabTriggered);
+            child.GetComponent<UiButton>().add_OnTriggered(new Action(delegate { otherMenuTabTriggered(child); }));
         }
 
         modsMenuTab = Object.Instantiate(menu.transform.FindChild("Controls"), menu.transform);
         modsMenuTab.name = "Mods";
         modsMenuTab.FindChild("Text (TMP)").GetComponent<TextMeshProUGUI>().text = "Mods";
-        Action modsTabTriggered = delegate { modsMenuTabTriggered(); };
-        modsMenuTab.GetComponent<UiButton>().add_OnTriggered(modsTabTriggered);
-        Action settingsTriggered = delegate { settingsWindowTriggered(); };
-        GameObject.Find(settingsButton).GetComponent<UiButton>()
-            .add_OnTriggered(settingsTriggered);
+        modsMenuTab.GetComponent<UiButton>().add_OnTriggered(new Action(modsMenuTabTriggered));
+        GameObject.Find(settingsButton).GetComponent<UiButton>().add_OnTriggered(new Action(settingsWindowTriggered));
         keyBindingCanvas = GameObject.Find(settingsMenuRoot + "/KeyBindingDialog").GetComponent<Canvas>();
         keyAlreadyUsed = GameObject.Find(settingsMenuRoot + "/AlreadyUsedKeyDialog");
-        Action alreadyUsedConfirmTriggered = delegate { alreadyUsedConfirmButtonTriggered(); };
         keyAlreadyUsed.transform.FindChild("Navigation").FindChild("Confirm").GetComponent<UiButton>()
-            .add_OnTriggered(alreadyUsedConfirmTriggered);
-        Action alreadyUsedCancelTriggered = delegate { alreadyUsedCancelButtonTriggered(); };
+            .add_OnTriggered(new Action(alreadyUsedConfirmButtonTriggered));
         keyAlreadyUsed.transform.FindChild("Navigation").FindChild("Cancel").GetComponent<UiButton>()
-            .add_OnTriggered(alreadyUsedCancelTriggered);
+            .add_OnTriggered(new Action(alreadyUsedCancelButtonTriggered));
         keyAlreadyUsedText = keyAlreadyUsed.transform.FindChild("Text (TMP)").GetComponent<TextMeshProUGUI>();
     }
 
@@ -117,7 +111,7 @@ public static class SettingsHelper
 
     private static void setupTemplates()
     {
-        seperatorTemplate = GameObject.Find("UIGameSettingsSeparator(Clone)").transform;
+        separatorTemplate = GameObject.Find("UIGameSettingsSeparator(Clone)").transform;
         var inputSetting =
             GameObject.Find(
                 "Canvas/WindowManager/1920x1080/UI Window Settings/Container/Scroll View/Viewport/Content/Settings/UIGameInputSetting(Clone)");
@@ -207,7 +201,7 @@ public static class SettingsHelper
 
     private static void alreadyUsedConfirmButtonTriggered()
     {
-        keySettingListening.changeKey(keyDoubleBindListening);
+        keySettingListening!.changeKey(keyDoubleBindListening);
         alreadyUsedCancelButtonTriggered();
     }
 
@@ -249,7 +243,7 @@ public static class SettingsHelper
             {
                 keyBindingCanvas.enabled = false;
                 if (Event.current.keyCode != KeyCode.Escape &&
-                    Event.current.keyCode != keySettingListening.getKey() && doubleBind() == false)
+                    Event.current.keyCode != keySettingListening.getKey() && !doubleBind())
                 {
                     keySettingListening.changeKey(Event.current.keyCode);
                     keySettingListening = null;
@@ -269,16 +263,18 @@ public static class SettingsHelper
     public class SettingsSection
     {
         internal readonly string sectionName;
+        private bool collapsed;
         private bool created;
-        private Transform seperator;
-        private Transform transform;
+        private bool firstLoad = true;
+        private GameObject image = null!;
+        private Transform separator = null!;
+        private Transform transform = null!;
 
         public SettingsSection(string SectionName)
         {
             foreach (var section in sections)
                 if (section.sectionName.Equals(SectionName))
                     throw new ArgumentException("Section already exists!", nameof(SectionName));
-
             sectionName = SectionName;
             sections.Add(this);
         }
@@ -290,8 +286,8 @@ public static class SettingsHelper
             foreach (var setting in sectionSettings)
                 setting.destroySetting();
             sectionSettings.Clear();
-            if (seperator != null)
-                seperator.gameObject.Destroy();
+            if (separator != null)
+                separator.gameObject.Destroy();
             if (transform != null)
                 transform.gameObject.Destroy();
             sections.Remove(this);
@@ -310,22 +306,21 @@ public static class SettingsHelper
         internal void resetSection()
         {
             foreach (var setting in sectionSettings) setting.resetSetting();
-
+            collapsed = false;
             created = false;
         }
 
         internal void setSectionParent(Transform? parent)
         {
-            if (sectionSettings.Count > 0)
-            {
-                if (transform == null) return;
-                transform.SetParent(parent);
-                seperator.SetParent(parent);
-                transform.localScale = Vector3.one;
-                seperator.localScale = Vector3.one;
-                foreach (var setting in sectionSettings)
-                    setting.setParent(parent);
-            }
+            if (sectionSettings.Count <= 0) return;
+            if (transform == null) return;
+            transform.SetParent(parent);
+            separator.SetParent(parent);
+            transform.localScale = Vector3.one;
+            separator.localScale = Vector3.one;
+            if (collapsed) return;
+            foreach (var setting in sectionSettings)
+                setting.setParent(parent);
         }
 
         internal void createSection(bool inGame)
@@ -342,7 +337,7 @@ public static class SettingsHelper
                         .Find(
                             "Canvas/WindowManagerCenterOption/UI Window Settings/Container/Scroll View/Viewport/Content/Settings/UIGameInputSetting(Clone)")
                         .transform);
-                    seperator = Object.Instantiate(GameObject
+                    separator = Object.Instantiate(GameObject
                         .Find(
                             "Canvas/WindowManagerCenterOption/UI Window Settings/Container/Scroll View/Viewport/Content/Settings/UIGameSettingsSeparator(Clone)")
                         .transform);
@@ -353,27 +348,63 @@ public static class SettingsHelper
                         .Find(
                             "Canvas/WindowManager/1920x1080/UI Window Settings/Container/Scroll View/Viewport/Content/Settings/UIGameInputSetting(Clone)")
                         .transform);
-                    seperator = Object.Instantiate(GameObject
+                    separator = Object.Instantiate(GameObject
                         .Find(
                             "Canvas/WindowManager/1920x1080/UI Window Settings/Container/Scroll View/Viewport/Content/Settings/UIGameSettingsSeparator(Clone)")
                         .transform);
                 }
 
                 transform.name = "CustomUISettingsSection";
-                seperator.name = "CustomUISettingsSectionSeparator";
+                separator.name = "CustomUISettingsSectionSeparator";
                 var text = transform.FindChild("Text (TMP)");
                 var textMesh = text.GetComponent<TextMeshProUGUI>();
                 textMesh.text = sectionName;
                 textMesh.m_fontSize = 20;
                 text.GetComponent<LayoutElement>().preferredWidth = 800;
-                transform.FindChild("UI Binding Press").gameObject.active = false;
+                var button = transform.FindChild("UI Binding Press");
+                button.GetComponent<UiButtonTriggerUnityEvent>().enabled = false;
+                button.GetComponent<UiButton>().add_OnTriggered(new Action(triggerCollapseButton));
+                button.FindChild("BG").gameObject.Destroy();
+                button.FindChild("Border").gameObject.Destroy();
+                button.FindChild("Text (TMP)").gameObject.Destroy();
+                button.GetComponent<LayoutElement>().minWidth = 30;
+                image = new GameObject("Image");
+                image.transform.SetParent(button);
+                var im = image.gameObject.AddComponent<Image>();
+                im.sprite = GameObject
+                    .Find("GameSettingsManager/UIGameListSetting/UIGameListSetting(Clone)/Dropdown/Arrow")
+                    .GetComponent<Image>().sprite;
+                im.preserveAspect = true;
+                image.transform.localScale = new Vector3(0.4f, 0.4f, 0.4f);
+                image.transform.localPosition = firstLoad ? new Vector3(-5, 0, 0) : new Vector3(120, 0, 0);
+                firstLoad = false;
                 transform.gameObject.SetActive(true);
-                seperator.gameObject.SetActive(true);
+                separator.gameObject.SetActive(true);
                 created = true;
             }
 
             foreach (var setting in sectionSettings)
                 setting.create(inGame);
+        }
+
+        private void triggerCollapseButton()
+        {
+            if (collapsed)
+            {
+                image.transform.eulerAngles = new Vector3(0, 0, 0);
+                foreach (var setting in sectionSettings)
+                    setting.setParent(transform.parent);
+                for (var i = 0; i < sectionSettings.Count; i++)
+                    sectionSettings[i].setSiblingIndex(separator.GetSiblingIndex() + 1 + i * 2);
+            }
+            else
+            {
+                image.transform.eulerAngles = new Vector3(0, 0, 90);
+                foreach (var setting in sectionSettings)
+                    setting.setParent(null);
+            }
+
+            collapsed = !collapsed;
         }
     }
 
@@ -382,13 +413,14 @@ public static class SettingsHelper
         protected readonly bool changeableInGame;
         private readonly string description;
         internal readonly string name;
+        protected readonly SettingsSection section;
         private readonly SettingType type;
         protected bool created;
-        protected SettingsSection section;
-        protected Transform seperator;
-        protected Transform transform;
+        private Transform separator = null!;
+        protected Transform transform = null!;
 
-        public Setting(SettingsSection Section, string settingName, string settingDescription, SettingType settingType,
+        protected Setting(SettingsSection Section, string settingName, string settingDescription,
+            SettingType settingType,
             bool ChangeableInGame)
         {
             foreach (var setting in Section.sectionSettings)
@@ -401,14 +433,16 @@ public static class SettingsHelper
             changeableInGame = ChangeableInGame;
             section = Section;
             section.addSetting(this);
-            Plugin.Log.LogInfo("Added " + GetType().Name + " \"" + name + "\" from Assembly \"" +
-                               Plugin.getCallingAssemblyName() + "\"");
+            var callingAssembly = Plugin.getCallingAssemblyName();
+            if (callingAssembly != null)
+                Plugin.Log.LogInfo("Added " + GetType().Name + " \"" + name + "\" from Assembly \"" + callingAssembly +
+                                   "\"");
         }
 
         public void destroySetting()
         {
-            if (seperator != null)
-                seperator.gameObject.Destroy();
+            if (separator != null)
+                separator.gameObject.Destroy();
             if (transform != null)
                 transform.gameObject.Destroy();
             Plugin.Log.LogInfo("Removed " + GetType().Name + " \"" + name + "\" from Assembly \"" +
@@ -451,9 +485,9 @@ public static class SettingsHelper
 
             transform.gameObject.SetActive(true);
 
-            seperator = Object.Instantiate(seperatorTemplate);
+            separator = Object.Instantiate(separatorTemplate);
             transform.name = "CustomUISetting";
-            seperator.name = "CustomUISettingsSeparator";
+            separator.name = "CustomUISettingsSeparator";
             transform.GetComponent<HorizontalLayoutGroup>().padding.left = 40;
             var text = transform.FindChild("Text (TMP)");
             text.GetComponent<LayoutElement>().preferredWidth = 500;
@@ -472,34 +506,42 @@ public static class SettingsHelper
             }
 
             transform.gameObject.SetActive(true);
-            seperator.gameObject.SetActive(true);
+            separator.gameObject.SetActive(true);
         }
 
-        internal void detachSeperator()
+        internal void detachSeparator()
         {
-            seperator.SetParent(null);
+            separator.SetParent(null);
         }
 
         internal void setParent(Transform? parent)
         {
             transform.SetParent(parent);
-            seperator.SetParent(parent);
+            separator.SetParent(parent);
             transform.localScale = Vector3.one;
-            seperator.localScale = Vector3.one;
+            separator.localScale = Vector3.one;
+        }
+
+        internal void setSiblingIndex(int siblingIndex)
+        {
+            transform.SetSiblingIndex(siblingIndex);
+            separator.SetSiblingIndex(siblingIndex + 1);
         }
     }
 
-    public class BooleanSetting : Setting
+    public sealed class BooleanSetting : Setting
     {
-        private TMP_Dropdown dropdown;
+        private TMP_Dropdown dropdown = null!;
         private bool value;
+        private readonly Action<bool>? callback;
 
         public BooleanSetting(SettingsSection section, string settingName, string settingDescription, bool defaultValue,
-            bool changeableInGame) :
+            bool changeableInGame, Action<bool>? valueChanged = null) :
             base(section, settingName, settingDescription, SettingType.Bool, changeableInGame)
         {
             value = defaultValue;
             loadSettingFromConfig();
+            callback = valueChanged;
         }
 
         internal override void create(bool inGame)
@@ -520,10 +562,11 @@ public static class SettingsHelper
             created = true;
         }
 
-        internal void valueChanged(int dropdownValue)
+        private void valueChanged(int dropdownValue)
         {
             value = dropdown.value.ToBool();
             saveSettingToConfig();
+            callback?.Invoke(value);
         }
 
         internal override void loadSettingFromConfig()
@@ -543,13 +586,13 @@ public static class SettingsHelper
         }
     }
 
-    public class KeySetting : Setting
+    public sealed class KeySetting : Setting
     {
         private readonly Action<KeyCode>? keyChanged;
         private readonly Action? keyPressed;
         private readonly bool onlyInGame;
         private KeyCode key;
-        private TextMeshProUGUI keyText;
+        private TextMeshProUGUI keyText = null!;
 
         public KeySetting(SettingsSection section, string settingName, string settingDescription, KeyCode defaultKey,
             Action<KeyCode>? keyChangedAction,
@@ -583,10 +626,10 @@ public static class SettingsHelper
         {
         }
 
-        internal void keyTriggeredAction(KeyCode keyCode)
+        private void keyTriggeredAction(KeyCode keyCode)
         {
             if (onlyInGame && !GameStateHelper.isInGame()) return;
-            if (keyCode == key) keyPressed();
+            if (keyCode == key) keyPressed!();
         }
 
         internal override void loadSettingFromConfig()
@@ -608,8 +651,7 @@ public static class SettingsHelper
             keyText = button.FindChild("Text (TMP)").GetComponent<TextMeshProUGUI>();
             keyText.text = key.ToString();
             button.GetComponent<UiButtonTriggerUnityEvent>().enabled = false;
-            Action triggered = delegate { buttonTriggered(); };
-            button.GetComponent<UiButton>().add_OnTriggered(triggered);
+            button.GetComponent<UiButton>().add_OnTriggered(new Action(buttonTriggered));
             if (!changeableInGame && inGame)
             {
                 button.GetComponent<UiButton>().enabled = false;
@@ -631,8 +673,7 @@ public static class SettingsHelper
             key = keyCode;
             saveSettingToConfig();
             keyText.text = keyCode.ToString();
-            if (keyChanged != null)
-                keyChanged(keyCode);
+            keyChanged?.Invoke(keyCode);
         }
 
         public KeyCode getKey()
@@ -641,11 +682,11 @@ public static class SettingsHelper
         }
     }
 
-    public class SliderSetting : Setting
+    public sealed class SliderSetting : Setting
     {
         private readonly int max;
         private readonly int min;
-        private Slider slider;
+        private Slider slider = null!;
         private int value;
 
         public SliderSetting(SettingsSection section, string settingName, string settingDescription, int defaultValue,
@@ -702,10 +743,10 @@ public static class SettingsHelper
         }
     }
 
-    public class NumberInputSetting : Setting
+    public sealed class NumberInputSetting : Setting
     {
         private readonly int defaultValue;
-        private TMP_InputField inputField;
+        private TMP_InputField inputField = null!;
         private int value;
 
         public NumberInputSetting(SettingsSection section, string settingName, string settingDescription,

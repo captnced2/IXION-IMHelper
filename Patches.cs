@@ -1,4 +1,5 @@
 ﻿using BulwarkStudios.Stanford.Core.UI;
+using BulwarkStudios.Stanford.Menu.UI;
 using HarmonyLib;
 using I2.Loc;
 
@@ -11,8 +12,8 @@ public static class Patches
     {
         public static void Postfix(ref string __result, object[] __args)
         {
-            if (__args[0] != null && __args[0].ToString().Contains("captnced/"))
-                __result = __args[0].ToString().Replace("captnced/", "");
+            if (__args[0] != null && __args[0].ToString()!.Contains("captnced/"))
+                __result = __args[0].ToString()!.Replace("captnced/", "");
         }
     }
 
@@ -22,6 +23,24 @@ public static class Patches
         public static void Prefix()
         {
             if (PopupHelper.textPopup.isOpened) PopupHelper.textPopup.close();
+        }
+    }
+
+    [HarmonyPatch(typeof(UIWindowLoadGameItem), nameof(UIWindowLoadGameItem.Initialize))]
+    public static class LoadMenuItemPatch
+    {
+        public static void Postfix(UIWindowLoadGameItem __instance)
+        {
+            SavesHelper.setupLoadMenuItem(__instance);
+        }
+    }
+    
+    [HarmonyPatch(typeof(UIWindowSaveGameItem), nameof(UIWindowSaveGameItem.Initialize))]
+    public static class SaveMenuItemPatch
+    {
+        public static void Postfix(UIWindowSaveGameItem __instance)
+        {
+            SavesHelper.setupSaveMenuItem(__instance);
         }
     }
 }

@@ -75,7 +75,6 @@ public static class GameStateHelper
                 catch (Exception e)
                 {
                     Plugin.Log.LogError("Error while executing scene changed to in-game listener: " + e);
-                    ;
                 }
     }
 }

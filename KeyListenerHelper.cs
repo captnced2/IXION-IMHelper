@@ -8,6 +8,7 @@ public static class KeyListenerHelper
 {
     private static readonly List<KeyValuePair<KeyCode, Action>> mainMenuListeners = [];
     private static readonly List<KeyValuePair<KeyCode, Action>> inGameListeners = [];
+    private static bool locked;
 
     public static void addMainMenuKeyListener(KeyCode key, Action listener)
     {
@@ -25,11 +26,22 @@ public static class KeyListenerHelper
             Plugin.Log.LogInfo("Added new KeyListener for key " + key + " for Assembly \"" + callingAssembly + "\"");
     }
 
+    public static void lockInputs()
+    {
+        locked = true;
+    }
+
+    public static void unlockInputs()
+    {
+        locked = false;
+    }
+
     internal class listener : MonoBehaviour
     {
         private void OnGUI()
         {
             if (Event.current.type != EventType.KeyDown || Event.current.keyCode == KeyCode.None) return;
+            if (locked && Event.current.keyCode != KeyCode.Escape) return;
             SettingsHelper.keyListener.checkKeyPresses();
             if (GameStateHelper.isInGame())
             {

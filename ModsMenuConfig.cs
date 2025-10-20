@@ -20,9 +20,11 @@ internal static class ModsMenuConfig
             goto Write;
         }
 
-        var newModEntry = new modEntry();
-        newModEntry.guid = guid;
-        newModEntry.enabled = enabled;
+        var newModEntry = new modEntry
+        {
+            guid = guid,
+            enabled = enabled
+        };
         allMods.Add(newModEntry);
 
         Write:
@@ -63,7 +65,7 @@ internal static class ModsMenuConfig
 
     private class modEntry
     {
-        public string guid { get; set; }
+        public string guid { get; init; }
         public bool enabled { get; set; }
     }
 }

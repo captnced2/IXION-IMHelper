@@ -54,7 +54,7 @@ public static class PopupHelper
                     GameObject.Find("Canvas").transform);
             transform.gameObject.SetActive(false);
             transform.name = "IMHelperTextPopup";
-            Action closePopup = delegate { close(); };
+            var closePopup = close;
             var closeButton = transform.FindChild("Container/UI Window Header/Close Button");
             closeButton.GetComponent<UiButtonTriggerUnityEvent>().enabled = false;
             closeButton.GetComponent<UiButton>().add_OnTriggered(closePopup);
@@ -63,7 +63,7 @@ public static class PopupHelper
             cancelButton.GetComponent<UiButton>().add_OnTriggered(closePopup);
             var okButton = transform.FindChild("Container/ButtonContainer/Validate");
             okButton.GetComponent<UiButtonTriggerUnityEvent>().enabled = false;
-            okButton.GetComponent<UiButton>().add_OnTriggered(new Action(delegate { submit(); }));
+            okButton.GetComponent<UiButton>().add_OnTriggered(new Action(submit));
             inputField = transform.FindChild("Container/Content/InputField").GetComponent<TMP_InputField>();
             inputField.m_TextComponent.m_fontStyle = FontStyles.Normal;
             title = transform.FindChild("Container/UI Window Header/Title").GetComponent<TextMeshProUGUI>();
