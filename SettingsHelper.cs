@@ -361,6 +361,9 @@ public static class SettingsHelper
                 textMesh.text = sectionName;
                 textMesh.m_fontSize = 20;
                 text.GetComponent<LayoutElement>().preferredWidth = 800;
+                var but = text.gameObject.AddComponent<UiButton>();
+                but.add_OnTriggered(new Action(triggerCollapseButton));
+                text.GetComponent<UITextMeshProSwapAccessibilityFont>().enabled = false;
                 var button = transform.FindChild("UI Binding Press");
                 button.GetComponent<UiButtonTriggerUnityEvent>().enabled = false;
                 button.GetComponent<UiButton>().add_OnTriggered(new Action(triggerCollapseButton));
