@@ -767,15 +767,25 @@ public static class SettingsHelper
             inputField.text = value.ToString();
             inputField.onValueChanged.AddListener((UnityAction<string>)valueChanged);
             inputField.onEndEdit.AddListener((UnityAction<string>)submit);
-
+            var textArea = inputField.transform.FindChild("Text Area");
+            textArea.GetComponent<RectMask2D>().enabled = false;
+            textArea.gameObject.AddComponent<UITooltipHoverHelper>();
+            setTooltip(description);
             if (!changeableInGame && inGame)
             {
                 transform.FindChild("InputField (TMP)(Clone)/Text Area/Text").GetComponent<TextMeshProUGUI>().color =
                     Color.gray;
                 inputField.interactable = false;
+                setTooltip("Setting cannot be changed while in game!");
             }
 
             created = true;
+        }
+
+        internal override void setTooltip(string tip)
+        {
+            base.setTooltip(tip);
+            transform?.FindChild("InputField (TMP)(Clone)")?.transform.FindChild("Text Area")?.GetComponent<UITooltipHoverHelper>()?.text = tip;
         }
 
         private void valueChanged(string s)
