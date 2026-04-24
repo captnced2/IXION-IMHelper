@@ -10,11 +10,11 @@ internal static class SettingsConfig
     private static readonly string configFilePath =
         Plugin.config.ConfigFilePath.Insert(Plugin.config.ConfigFilePath.Length - 4, ".settings");
 
-    internal static void saveSetting(string section, string setting, string value)
+    internal static void saveSetting(string path, string value)
     {
         var allSettings = getAllConfigSettings() ?? [];
         foreach (var configSetting in allSettings)
-            if (configSetting.Section.Equals(section) && configSetting.Setting.Equals(setting))
+            if (configSetting.Path == path)
             {
                 configSetting.Value = value;
                 goto Write;
@@ -22,8 +22,7 @@ internal static class SettingsConfig
 
         var newConfigSettingEntry = new configSettingEntry
         {
-            Section = section,
-            Setting = setting,
+            Path = path,
             Value = value
         };
         allSettings.Add(newConfigSettingEntry);
@@ -32,15 +31,15 @@ internal static class SettingsConfig
         {
             File.WriteAllText(configFilePath, JsonSerializer.Serialize(allSettings));
         }
-        Plugin.Log.LogInfo("Setting \"" + section + "." + setting + "\" set to \"" + value + "\"");
+        Plugin.Log.LogInfo("Setting \"" + path + "\" set to \"" + value + "\"");
     }
 
-    internal static string loadSetting(string section, string setting)
+    internal static string loadSetting(string path)
     {
         var allSettings = getAllConfigSettings();
         if (allSettings == null) return null;
         foreach (var configSetting in allSettings)
-            if (configSetting.Section.Equals(section) && configSetting.Setting.Equals(setting))
+            if (configSetting.Path == path)
                 return configSetting.Value;
 
         return null;
@@ -61,15 +60,14 @@ internal static class SettingsConfig
 
         var allSettings = new List<configSettingEntry>();
         foreach (var configEntry in allEntries)
-            if (!(configEntry.Section == null || configEntry.Setting == null || configEntry.Value == null))
+            if (!(configEntry.Path == null || configEntry.Value == null))
                 allSettings.Add(configEntry);
         return allSettings;
     }
 
-    internal class configSettingEntry
+    private class configSettingEntry
     {
-        public string Section { get; set; }
-        public string Setting { get; set; }
+        public string Path { get; init; }
         public string Value { get; set; }
     }
 }

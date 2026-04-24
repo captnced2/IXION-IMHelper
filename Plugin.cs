@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Reflection;
+using System.Text;
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
@@ -17,7 +18,7 @@ public class Plugin : BasePlugin
 {
     internal const string Guid = "captnced.IMHelper";
     private const string Name = "IMHelper";
-    private const string Version = "3.2.0";
+    private const string Version = "3.3.0";
     internal new static ManualLogSource Log;
     internal static MonoHelper monoHelper;
     internal static ConfigFile config;
@@ -38,9 +39,11 @@ public class Plugin : BasePlugin
         GameStateHelper.addSceneChangedToInGameListener(SettingsHelper.inGameMenuListener);
         GameStateHelper.addSceneChangedListener(ModsMenu.mainMenuListener, GameStateHelper.GameScene.MainMenu);
         SavesHelper.init();
-        var fpsSetting = new SettingsHelper.BooleanSetting(helperSettingsSection, "FPS Display",
-            "Enables the FPS counter in the top right", false, true, toggleFpsDisplay);
-        GameStateHelper.addSceneChangedListener(delegate { toggleFpsDisplay(true); }, GameStateHelper.GameScene.MainMenu);
+        SettingsHelper.addTopSection(helperSettingsSection);
+        var fps = new SettingsHelper.BooleanSetting("FPS Display", "Enables the FPS counter in the top right", false, true,
+            toggleFpsDisplay);
+        helperSettingsSection.addItem(fps);
+        GameStateHelper.addSceneChangedListener(delegate { toggleFpsDisplay(fps.getValue()); }, GameStateHelper.GameScene.MainMenu);
         Log.LogInfo("Loaded \"" + Name + "\" version " + Version + "!");
     }
 

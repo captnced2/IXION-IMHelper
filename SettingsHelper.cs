@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using BulwarkStudios.GameSystems.Ui;
+using BulwarkStudios.Stanford.Core.UI;
 using BulwarkStudios.Stanford.Utils.Extensions;
 using BulwarkStudios.Utils.UI;
 using Stanford.Settings;
@@ -25,7 +27,8 @@ public static class SettingsHelper
         NumberInput
     }
 
-    private static readonly List<SettingsSection> sections = [];
+    private static readonly List<SettingsSection> topSections = [];
+    private static readonly List<KeySetting> allKeySettings = [];
     private static Canvas keyBindingCanvas = null!;
     private static GameObject keyAlreadyUsed = null!;
     private static TextMeshProUGUI keyAlreadyUsedText = null!;
@@ -42,27 +45,30 @@ public static class SettingsHelper
     private static Transform boolTemplate = null!;
     private static Transform sliderTemplate = null!;
     private static Transform numberInputTemplate = null!;
+    private static bool firstLoad = true;
 
     internal static void mainMenuListener()
     {
         initialized = false;
-        foreach (var section in sections)
-            section.resetSection();
+        foreach (var section in topSections)
+            section.reset();
         settingsMenuRoot = "Canvas/WindowManager/1920x1080/UI Window Settings";
         settingsButton = "Canvas/1920x1080/Canvas Group/Default/Menu/Button_Settings";
         setupTab();
+        loadAllSettings();
     }
 
     internal static void inGameMenuListener()
     {
         initialized = false;
         initializedInGame = false;
-        foreach (var section in sections)
-            section.resetSection();
+        foreach (var section in topSections)
+            section.reset();
         settingsMenuRoot = "Canvas/WindowManagerCenterOption/UI Window Settings";
         settingsButton = "Canvas/WindowManagerCenterOption/UI Window Option/Container/Content/Settings";
         GameObject.Find(settingsButton).GetComponent<UiButton>()
             .add_OnTriggered(new Action(settingsWindowTriggeredInGame));
+        loadAllSettings();
     }
 
     private static void setupTab()
@@ -91,22 +97,33 @@ public static class SettingsHelper
 
     private static void modsMenuTabTriggered()
     {
-        if (!initialized)
+        try
         {
-            setupTemplates();
-            initialized = true;
-        }
+            if (!initialized)
+            {
+                setupTemplates();
+                foreach (var section in topSections)
+                    section.create(GameStateHelper.isInGame());
+                initialized = true;
+            }
 
-        foreach (var section in sections)
-            section.createSection(GameStateHelper.isInGame());
-        GameObject.Find(settingsMenuRoot + "/Container/Navigation").active = false;
-        var scrollViewSettings =
-            GameObject.Find(
-                settingsMenuRoot + "/Container/Scroll View/Viewport/Content/Settings");
-        scrollViewSettings.transform.DetachChildren();
-        if (sections.Count == 0) return;
-        foreach (var section in sections)
-            section.setSectionParent(scrollViewSettings.transform);
+            GameObject.Find(settingsMenuRoot + "/Container/Navigation").active = false;
+            var scrollViewSettings =
+                GameObject.Find(
+                    settingsMenuRoot + "/Container/Scroll View/Viewport/Content/Settings");
+            scrollViewSettings.transform.DetachChildren();
+            if (topSections.Count == 0) return;
+            foreach (var section in topSections)
+                section.setParent(scrollViewSettings.transform);
+            scrollViewSettings.gameObject.SetActive(false);
+            scrollViewSettings.gameObject.SetActive(true);
+            firstLoad = false;
+        }
+        catch (Exception e)
+        { 
+            GameObject.Find(settingsMenuRoot + "/Container/UI Window Header/Menu/Game").GetComponent<UiButtonTriggerUnityEvent>().OnEventTriggered();
+            Plugin.Log.LogError("Could not open Mods Settings Tab:\n" + e);
+        }
     }
 
     private static void setupTemplates()
@@ -169,7 +186,7 @@ public static class SettingsHelper
 
     private static void setSettingsTabVisibility()
     {
-        modsMenuTab.SetParent(sections.Count == 0
+        modsMenuTab.SetParent(topSections.Count == 0
             ? null
             : GameObject.Find(settingsMenuRoot + "/Container/UI Window Header/Menu").transform);
     }
@@ -188,8 +205,8 @@ public static class SettingsHelper
 
     private static void detachAllCustomSettings()
     {
-        foreach (var section in sections)
-            section.detachSection();
+        foreach (var section in topSections)
+            section.setParent(null);
     }
 
     private static void alreadyUsedCancelButtonTriggered()
@@ -215,9 +232,8 @@ public static class SettingsHelper
                                           setting.displayNameText.text + "</style>. Do you want to double bind?";
                 goto Double;
             }
-
-        foreach (var section in sections)
-        foreach (var keySetting in section.sectionSettings.OfType<KeySetting>())
+        
+        foreach (var keySetting in allKeySettings)
             if (keySetting.getKey() == Event.current.keyCode)
             {
                 keyAlreadyUsedText.text = "The <style=\"Important\">" + Event.current.keyCode +
@@ -260,72 +276,103 @@ public static class SettingsHelper
         }
     }
 
-    public class SettingsSection
+    public static void addTopSection(SettingsSection section)
     {
-        internal readonly string sectionName;
+        foreach (var topSection in topSections)
+            if (topSection.name == section.name)
+                throw new ArgumentException("Section already exists!", nameof(section));
+        
+        topSections.Add(section);
+    }
+
+    private static void loadAllSettings()
+    {
+        foreach (var section in topSections)
+        {
+            section.loadSetting();
+        }
+    }
+
+    public class SettingsSection(string sectionName) : ISectionItem
+    {
         private bool collapsed;
         private bool created;
-        private bool firstLoad = true;
         private GameObject image = null!;
-        private Transform separator = null!;
-        private Transform transform = null!;
+        private Transform? separator;
+        private Transform? transform;
 
-        public SettingsSection(string SectionName)
+        private List<ISectionItem> subItems { get; } = [];
+
+        public string name { get; init; } = sectionName;
+        public SettingsSection? parent { get; set; } = null;
+
+        public void destroy()
         {
-            foreach (var section in sections)
-                if (section.sectionName.Equals(SectionName))
-                    throw new ArgumentException("Section already exists!", nameof(SectionName));
-            sectionName = SectionName;
-            sections.Add(this);
-        }
-
-        internal List<Setting> sectionSettings { get; } = new();
-
-        public void destroySection()
-        {
-            foreach (var setting in sectionSettings)
-                setting.destroySetting();
-            sectionSettings.Clear();
+            foreach (var item in subItems)
+                item.destroy();
+            subItems.Clear();
             if (separator != null)
                 separator.gameObject.Destroy();
             if (transform != null)
                 transform.gameObject.Destroy();
-            sections.Remove(this);
+            if (parent == null)
+                topSections.Remove(this);
         }
 
-        internal void addSetting(Setting setting)
+        public void addItem(ISectionItem item)
         {
-            sectionSettings.Add(setting);
+            foreach (var subItem in subItems)
+                if (subItem.name == item.name)
+                    throw new ArgumentException("Setting already exists!", nameof(item));
+            subItems.Add(item);
+            item.parent = this;
         }
 
-        internal void detachSection()
+        public void addItem<T>(List<T> items) where T : ISectionItem
         {
-            setSectionParent(null);
+            foreach (var i in items)
+            {
+                addItem(i);
+            }
         }
 
-        internal void resetSection()
+        public void loadSetting()
         {
-            foreach (var setting in sectionSettings) setting.resetSetting();
+            foreach (var subItem in subItems)
+            {
+                subItem.loadSetting();
+            }
+        }
+
+        public string getPath()
+        {
+            if (parent != null)
+                return parent.getPath() + "/" + name;
+            return name;
+        }
+
+        public void reset()
+        {
+            foreach (var item in subItems) item.reset();
             collapsed = false;
             created = false;
         }
 
-        internal void setSectionParent(Transform? parent)
+        public void setParent(Transform? parentItem)
         {
-            if (sectionSettings.Count <= 0) return;
-            if (transform == null) return;
-            transform.SetParent(parent);
-            separator.SetParent(parent);
+            if (subItems.Count <= 0) return;
+            if (transform == null || separator == null) return;
+            transform.SetParent(parentItem);
+            separator.SetParent(parentItem);
             transform.localScale = Vector3.one;
             separator.localScale = Vector3.one;
-            if (collapsed) return;
-            foreach (var setting in sectionSettings)
-                setting.setParent(parent);
+            foreach (var item in subItems)
+                item.setParent(parentItem);
         }
 
-        internal void createSection(bool inGame)
+        public void create(bool inGame)
         {
-            if (sectionSettings.Count <= 0) return;
+            if (subItems.Count <= 0) return;
             if (!created)
             {
                 var inputSetting =
@@ -358,8 +405,11 @@ public static class SettingsHelper
                 separator.name = "CustomUISettingsSectionSeparator";
                 var text = transform.FindChild("Text (TMP)");
                 var textMesh = text.GetComponent<TextMeshProUGUI>();
-                textMesh.text = sectionName;
-                textMesh.m_fontSize = 20;
+                var depth = getPath().Split('/').Length - 1;
+                var tabs = "";
+                for (var i = 0; i < depth; i++) tabs += "   ";
+                textMesh.text = tabs + name;
+                textMesh.m_fontSize = 20 - depth * 2;
                 text.GetComponent<LayoutElement>().preferredWidth = 800;
                 var but = text.gameObject.AddComponent<UiButton>();
                 but.add_OnTriggered(new Action(triggerCollapseButton));
@@ -380,14 +430,13 @@ public static class SettingsHelper
                 im.preserveAspect = true;
                 image.transform.localScale = new Vector3(0.4f, 0.4f, 0.4f);
                 image.transform.localPosition = firstLoad ? new Vector3(-5, 0, 0) : new Vector3(120, 0, 0);
-                firstLoad = false;
                 transform.gameObject.SetActive(true);
                 separator.gameObject.SetActive(true);
                 created = true;
             }
 
-            foreach (var setting in sectionSettings)
-                setting.create(inGame);
+            foreach (var item in subItems)
+                item.create(inGame);
         }
 
         private void triggerCollapseButton()
@@ -395,54 +444,60 @@ public static class SettingsHelper
             if (collapsed)
             {
                 image.transform.eulerAngles = new Vector3(0, 0, 0);
-                foreach (var setting in sectionSettings)
-                    setting.setParent(transform.parent);
-                for (var i = 0; i < sectionSettings.Count; i++)
-                    sectionSettings[i].setSiblingIndex(separator.GetSiblingIndex() + 1 + i * 2);
+                foreach (var item in subItems)
+                    item.setVisible(true);
             }
             else
             {
                 image.transform.eulerAngles = new Vector3(0, 0, 90);
-                foreach (var setting in sectionSettings)
-                    setting.setParent(null);
+                foreach (var item in subItems)
+                    item.setVisible(false);
             }
 
             collapsed = !collapsed;
         }
+
+        public void setVisible(bool visible)
+        {
+            foreach (var item in subItems)
+                if (!visible)
+                    item.setVisible(false);
+                else
+                    if (!collapsed)
+                        item.setVisible(true);
+            transform?.gameObject.SetActive(visible);
+            separator?.gameObject.SetActive(visible);
+        }
     }
 
-    public abstract class Setting
+    public abstract class Setting : ISectionItem
     {
         protected readonly bool changeableInGame;
-        private readonly string description;
-        internal readonly string name;
-        protected readonly SettingsSection section;
+        protected readonly string description;
         private readonly SettingType type;
         protected bool created;
-        private Transform separator = null!;
-        protected Transform transform = null!;
+        private Transform? separator;
+        protected Transform? transform;
 
-        protected Setting(SettingsSection Section, string settingName, string settingDescription,
+        protected Setting(string settingName, string settingDescription,
             SettingType settingType,
             bool ChangeableInGame)
         {
-            foreach (var setting in Section.sectionSettings)
-                if (setting.name.Equals(settingName))
-                    throw new ArgumentException("Setting already exists!", nameof(settingName));
-
             type = settingType;
             name = settingName;
             description = settingDescription;
             changeableInGame = ChangeableInGame;
-            section = Section;
-            section.addSetting(this);
             var callingAssembly = Plugin.getCallingAssemblyName();
             if (callingAssembly != null)
                 Plugin.Log.LogInfo("Added " + GetType().Name + " \"" + name + "\" from Assembly \"" + callingAssembly +
                                    "\"");
+            initialized = false;
         }
+        
+        public string name { get; init; }
+        public SettingsSection? parent { get; set; }
 
-        public void destroySetting()
+        public void destroy()
         {
             if (separator != null)
                 separator.gameObject.Destroy();
@@ -452,41 +507,37 @@ public static class SettingsHelper
                                Plugin.getCallingAssemblyName() + "\"");
         }
 
-        internal void resetSetting()
+        public void reset()
         {
             created = false;
         }
 
-        internal abstract void loadSettingFromConfig();
+        public string getPath()
+        {
+            if (parent == null) return null!;
+            return parent.getPath() + "." + name;
+        }
+
+        public void loadSetting()
+        {
+            this.loadSettingFromConfig();
+        }
+
+        protected abstract void loadSettingFromConfig();
         internal abstract void saveSettingToConfig();
 
-        internal virtual void create(bool inGame)
+        public virtual void create(bool inGame)
         {
-            switch (type)
+            transform = type switch
             {
-                case SettingType.Key:
-                {
-                    transform = Object.Instantiate(keyTemplate);
-                    break;
-                }
-                case SettingType.Bool:
-                {
-                    transform = Object.Instantiate(boolTemplate);
-                    break;
-                }
-                case SettingType.Slider:
-                {
-                    transform = Object.Instantiate(sliderTemplate);
-                    break;
-                }
-                case SettingType.NumberInput:
-                {
-                    transform = Object.Instantiate(numberInputTemplate);
-                    break;
-                }
-            }
+                SettingType.Key => Object.Instantiate(keyTemplate),
+                SettingType.Bool => Object.Instantiate(boolTemplate),
+                SettingType.Slider => Object.Instantiate(sliderTemplate),
+                SettingType.NumberInput => Object.Instantiate(numberInputTemplate),
+                _ => transform
+            };
 
-            transform.gameObject.SetActive(true);
+            transform!.gameObject.SetActive(true);
 
             separator = Object.Instantiate(separatorTemplate);
             transform.name = "CustomUISetting";
@@ -494,14 +545,13 @@ public static class SettingsHelper
             transform.GetComponent<HorizontalLayoutGroup>().padding.left = 40;
             var text = transform.FindChild("Text (TMP)");
             text.GetComponent<LayoutElement>().preferredWidth = 500;
-            var tooltip = text.GetComponent<UITooltipHoverHelper>();
-            tooltip.text = description;
+            setTooltip(description);
             if (!changeableInGame && inGame)
             {
                 var textMesh = text.GetComponent<TextMeshProUGUI>();
                 textMesh.text = "<s>" + name + "</s>";
                 textMesh.color = Color.gray;
-                tooltip.text = "Setting cannot be changed while in game!";
+                setTooltip("Setting cannot be changed while in game!");
             }
             else
             {
@@ -512,46 +562,42 @@ public static class SettingsHelper
             separator.gameObject.SetActive(true);
         }
 
-        internal void detachSeparator()
+        internal virtual void setTooltip(string tip)
         {
-            separator.SetParent(null);
+            transform?.FindChild("Text (TMP)")?.GetComponent<UITooltipHoverHelper>().text = tip;
         }
 
-        internal void setParent(Transform? parent)
+        public void setVisible(bool visible)
         {
-            transform.SetParent(parent);
-            separator.SetParent(parent);
+            transform?.gameObject.SetActive(visible);
+            separator?.gameObject.SetActive(visible);
+        }
+
+        public void setParent(Transform? settingParent)
+        {
+            transform!.SetParent(settingParent);
+            separator!.SetParent(settingParent);
             transform.localScale = Vector3.one;
             separator.localScale = Vector3.one;
         }
-
-        internal void setSiblingIndex(int siblingIndex)
-        {
-            transform.SetSiblingIndex(siblingIndex);
-            separator.SetSiblingIndex(siblingIndex + 1);
-        }
     }
 
-    public sealed class BooleanSetting : Setting
+    public sealed class BooleanSetting(
+        string settingName,
+        string settingDescription,
+        bool defaultValue,
+        bool changeableInGame,
+        Action<bool>? callback = null)
+        : Setting(settingName, settingDescription, SettingType.Bool, changeableInGame)
     {
         private TMP_Dropdown dropdown = null!;
-        private bool value;
-        private readonly Action<bool>? callback;
+        private bool value = defaultValue;
 
-        public BooleanSetting(SettingsSection section, string settingName, string settingDescription, bool defaultValue,
-            bool changeableInGame, Action<bool>? valueChanged = null) :
-            base(section, settingName, settingDescription, SettingType.Bool, changeableInGame)
-        {
-            value = defaultValue;
-            loadSettingFromConfig();
-            callback = valueChanged;
-        }
-
-        internal override void create(bool inGame)
+        public override void create(bool inGame)
         {
             if (created) return;
             base.create(inGame);
-            dropdown = transform.FindChild("Dropdown").GetComponent<TMP_Dropdown>();
+            dropdown = transform!.FindChild("Dropdown").GetComponent<TMP_Dropdown>();
             dropdown.onValueChanged.AddListener((UnityAction<int>)valueChanged);
             dropdown.SetValue(value.ToInt(), false);
             if (!changeableInGame && inGame)
@@ -572,15 +618,15 @@ public static class SettingsHelper
             callback?.Invoke(value);
         }
 
-        internal override void loadSettingFromConfig()
+        protected override void loadSettingFromConfig()
         {
-            var savedValue = SettingsConfig.loadSetting(section.sectionName, name);
+            var savedValue = SettingsConfig.loadSetting(getPath());
             if (savedValue != null) value = bool.Parse(savedValue);
         }
 
         internal override void saveSettingToConfig()
         {
-            SettingsConfig.saveSetting(section.sectionName, name, value.ToString());
+            SettingsConfig.saveSetting(getPath(), value.ToString());
         }
 
         public bool getValue()
@@ -589,6 +635,7 @@ public static class SettingsHelper
         }
     }
 
+    [SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
     public sealed class KeySetting : Setting
     {
         private readonly Action<KeyCode>? keyChanged;
@@ -597,9 +644,9 @@ public static class SettingsHelper
         private KeyCode key;
         private TextMeshProUGUI keyText = null!;
 
-        public KeySetting(SettingsSection section, string settingName, string settingDescription, KeyCode defaultKey,
+        public KeySetting(string settingName, string settingDescription, KeyCode defaultKey,
             Action<KeyCode>? keyChangedAction,
-            Action? keyPressedAction, bool onlyTriggerInGame, bool changeableInGame) : base(section, settingName,
+            Action? keyPressedAction, bool onlyTriggerInGame, bool changeableInGame) : base(settingName,
             settingDescription,
             SettingType.Key, changeableInGame)
         {
@@ -611,19 +658,18 @@ public static class SettingsHelper
                 onlyInGame = onlyTriggerInGame;
                 keyPressedListeners.Add(keyTriggeredAction);
             }
-
-            loadSettingFromConfig();
+            allKeySettings.Add(this);
         }
 
-        public KeySetting(SettingsSection section, string settingName, string settingDescription, KeyCode defaultKey,
-            Action? keyPressedAction, bool onlyTriggerInGame) : this(section, settingName, settingDescription,
+        public KeySetting(string settingName, string settingDescription, KeyCode defaultKey,
+            Action? keyPressedAction, bool onlyTriggerInGame) : this(settingName, settingDescription,
             defaultKey, null,
             keyPressedAction, onlyTriggerInGame, true)
         {
         }
 
-        public KeySetting(SettingsSection section, string settingName, string settingDescription, KeyCode defaultKey,
-            Action<KeyCode>? keyChangedAction, bool changeableInGame) : this(section, settingName, settingDescription,
+        public KeySetting(string settingName, string settingDescription, KeyCode defaultKey,
+            Action<KeyCode>? keyChangedAction, bool changeableInGame) : this(settingName, settingDescription,
             defaultKey,
             keyChangedAction, null, false, changeableInGame)
         {
@@ -635,22 +681,22 @@ public static class SettingsHelper
             if (keyCode == key) keyPressed!();
         }
 
-        internal override void loadSettingFromConfig()
+        protected override void loadSettingFromConfig()
         {
-            var savedKey = SettingsConfig.loadSetting(section.sectionName, name);
+            var savedKey = SettingsConfig.loadSetting(getPath());
             if (savedKey != null) Enum.TryParse(savedKey, out key);
         }
 
         internal override void saveSettingToConfig()
         {
-            SettingsConfig.saveSetting(section.sectionName, name, key.ToString());
+            SettingsConfig.saveSetting(getPath(), key.ToString());
         }
 
-        internal override void create(bool inGame)
+        public override void create(bool inGame)
         {
             if (created) return;
             base.create(inGame);
-            var button = transform.FindChild("UI Binding Press");
+            var button = transform!.FindChild("UI Binding Press");
             keyText = button.FindChild("Text (TMP)").GetComponent<TextMeshProUGUI>();
             keyText.text = key.ToString();
             button.GetComponent<UiButtonTriggerUnityEvent>().enabled = false;
@@ -685,27 +731,21 @@ public static class SettingsHelper
         }
     }
 
-    public sealed class SliderSetting : Setting
+    public sealed class SliderSetting(
+        string settingName,
+        string settingDescription,
+        int defaultValue,
+        int min,
+        int max,
+        bool changeableInGame)
+        : Setting(settingName, settingDescription, SettingType.Slider, changeableInGame)
     {
-        private readonly int max;
-        private readonly int min;
         private Slider slider = null!;
-        private int value;
+        private int value = defaultValue;
 
-        public SliderSetting(SettingsSection section, string settingName, string settingDescription, int defaultValue,
-            int min, int max,
-            bool changeableInGame) :
-            base(section, settingName, settingDescription, SettingType.Slider, changeableInGame)
+        protected override void loadSettingFromConfig()
         {
-            this.min = min;
-            this.max = max;
-            value = defaultValue;
-            loadSettingFromConfig();
-        }
-
-        internal override void loadSettingFromConfig()
-        {
-            var savedValue = SettingsConfig.loadSetting(section.sectionName, name);
+            var savedValue = SettingsConfig.loadSetting(getPath());
             if (savedValue != null)
             {
                 var parsed = int.Parse(savedValue);
@@ -715,14 +755,14 @@ public static class SettingsHelper
 
         internal override void saveSettingToConfig()
         {
-            SettingsConfig.saveSetting(section.sectionName, name, value.ToString());
+            SettingsConfig.saveSetting(getPath(), value.ToString());
         }
 
-        internal override void create(bool inGame)
+        public override void create(bool inGame)
         {
             if (created) return;
             base.create(inGame);
-            slider = transform.FindChild("Slider").GetComponent<Slider>();
+            slider = transform!.FindChild("Slider").GetComponent<Slider>();
             slider.minValue = min;
             slider.maxValue = max;
             slider.value = value;
@@ -746,28 +786,32 @@ public static class SettingsHelper
         }
     }
 
-    public sealed class NumberInputSetting : Setting
+    public sealed class NumberInputSetting(
+        string settingName,
+        string settingDescription,
+        float defaultValue,
+        bool changeableInGame)
+        : Setting(settingName, settingDescription, SettingType.NumberInput, changeableInGame)
     {
-        private readonly int defaultValue;
+        private readonly float defaultValue = defaultValue;
         private TMP_InputField inputField = null!;
-        private int value;
+        private float value = defaultValue;
+        private readonly bool intBased;
 
-        public NumberInputSetting(SettingsSection section, string settingName, string settingDescription,
+        public NumberInputSetting(string settingName, string settingDescription,
             int defaultValue, bool changeableInGame) :
-            base(section, settingName, settingDescription, SettingType.NumberInput, changeableInGame)
+            this(settingName, settingDescription, (float) defaultValue, changeableInGame)
         {
-            this.defaultValue = defaultValue;
-            value = defaultValue;
-            loadSettingFromConfig();
+            intBased = true;
         }
 
-        internal override void create(bool inGame)
+        public override void create(bool inGame)
         {
             if (created) return;
             base.create(inGame);
-            transform.FindChild("Text (TMP)").GetComponent<LayoutElement>().preferredWidth = 450;
+            transform!.FindChild("Text (TMP)").GetComponent<LayoutElement>().preferredWidth = 450;
             inputField = transform.FindChild("InputField (TMP)(Clone)").GetComponent<TMP_InputField>();
-            inputField.text = value.ToString();
+            inputField.text = value.ToString(CultureInfo.InvariantCulture);
             inputField.onValueChanged.AddListener((UnityAction<string>)valueChanged);
             inputField.onEndEdit.AddListener((UnityAction<string>)submit);
             var textArea = inputField.transform.FindChild("Text Area");
@@ -793,41 +837,81 @@ public static class SettingsHelper
 
         private void valueChanged(string s)
         {
-            inputField.text = Regex.Replace(inputField.text, "[^0-9]", "");
+            inputField.text = Regex.Replace(inputField.text, intBased ? "[^0-9]" : "[^0-9.]", "");
         }
 
         private void submit(string s)
         {
-            var success = int.TryParse(s, out var val);
-            if (!success)
+            if (intBased)
             {
-                inputField.text = inputField.m_OriginalText;
-                return;
-            }
+                var success = int.TryParse(s, out var val);
+                if (!success)
+                {
+                    inputField.text = inputField.m_OriginalText;
+                    return;
+                }
 
-            value = val;
+                value = val;
+            }
+            else
+            {
+                var success = float.TryParse(s, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var valF);
+                if (!success)
+                {
+                    inputField.text = inputField.m_OriginalText;
+                    return;
+                }
+                value = valF;
+            }
             saveSettingToConfig();
         }
 
         public int getValue()
         {
-            return value;
+            return (int) value;
         }
 
         public int getDefaultValue()
         {
+            return (int) defaultValue;
+        }
+        
+        public float getValueFloat()
+        {
+            return value;
+        }
+
+        public float getDefaultValueFloat()
+        {
             return defaultValue;
         }
 
-        internal override void loadSettingFromConfig()
+        protected override void loadSettingFromConfig()
         {
-            var savedValue = SettingsConfig.loadSetting(section.sectionName, name);
-            if (savedValue != null) value = int.Parse(savedValue);
+            var savedValue = SettingsConfig.loadSetting(getPath());
+            if (savedValue == null) return;
+            if (intBased)
+                value = int.Parse(savedValue);
+            else
+                value = float.Parse(savedValue, CultureInfo.InvariantCulture);
         }
 
         internal override void saveSettingToConfig()
         {
-            SettingsConfig.saveSetting(section.sectionName, name, value.ToString());
+            SettingsConfig.saveSetting(getPath(), value.ToString(CultureInfo.InvariantCulture));
         }
+    }
+
+    public interface ISectionItem
+    {
+        public string name { get; init; }
+        public SettingsSection? parent { get; set; }
+        public string getPath();
+        public void loadSetting();
+        public void destroy();
+        internal void reset();
+        internal void create(bool inGame);
+        internal void setVisible(bool visible);
+        internal void setParent(Transform? parent);
     }
 }

@@ -17,8 +17,8 @@ internal static class SavesHelper
 
     internal static void init()
     {
-        set = new SettingsHelper.BooleanSetting(Plugin.helperSettingsSection, "Save Utilities",
-            "Enables additional info in saves window", false, true);
+        set = new SettingsHelper.BooleanSetting("Save Utilities", "Enables additional info in saves window", false, true);
+        Plugin.helperSettingsSection.addItem(set);
     }
 
     internal static void setupLoadMenuItem(UIWindowLoadGameItem item)
